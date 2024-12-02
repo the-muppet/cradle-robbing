@@ -4,3 +4,5 @@ numpy
 pandas
 pandas-gbq
 redis[hiredis]
+tqdm
+python-dotenv

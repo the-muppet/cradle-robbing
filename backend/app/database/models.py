@@ -1,5 +1,7 @@
 from typing import Optional, List, Dict, Any, Literal
 from pydantic import BaseModel, Field
+from dataclasses import dataclass
+from google.oauth2 import service_account
 
 # Base database models
 class DatabaseField(BaseModel):
@@ -92,3 +94,29 @@ class QueryValidationError(BaseModel):
     line: Optional[int] = None
     column: Optional[int] = None
     severity: Literal["ERROR", "WARNING", "INFO"]
+
+class ColumnSchema(BaseModel):
+    name: str
+    type: str
+
+class QueryRequest(BaseModel):
+    query: str
+
+class QueryResponse(BaseModel):
+    rows: List[Dict[str, Any]]
+    schema: List[ColumnSchema]
+    total_rows: int
+
+class SyncResponse(BaseModel):
+    status: str
+    message: str
+    details: Optional[Dict[str, Any]] = None
+
+class SyncTableRequest(BaseModel):
+    dataset_id: str
+    table_id: str
+    chunksize: int = Field(default=10000, gt=0)
+
+class SyncDatasetRequest(BaseModel):
+    dataset_id: str
+    exclude_tables: Optional[List[str]] = None
