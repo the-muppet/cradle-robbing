@@ -19,23 +19,7 @@ import {
 } from '@chakra-ui/react'
 import { SearchIcon, CalendarIcon, TimeIcon } from '@chakra-ui/icons'
 import { useState, useMemo, useEffect } from 'react'
-
-interface TableSelectorProps {
-    isOpen: boolean;
-    onClose: () => void;
-    tables: string[];
-    onSelect: (table: string) => void;
-    selectedTable?: string;
-    title?: string;
-}
-
-interface ParsedTable {
-    name: string;
-    year?: string;
-    month?: string;
-    day?: string;
-    type?: string;
-}
+import type { TableSelectorProps, ParsedTable } from './types'
 
 export default function TableSelector({ isOpen, onClose, tables, onSelect, selectedTable, title }: TableSelectorProps) {
     const [search, setSearch] = useState('')
@@ -45,7 +29,7 @@ export default function TableSelector({ isOpen, onClose, tables, onSelect, selec
     const parseTableName = (table: string): ParsedTable => {
         const parts = table.split('_')
         const result: ParsedTable = { name: table }
-        
+
         if (parts.length >= 3) {
             const [year, month, day, ...rest] = parts
             if (!isNaN(Number(year)) && !isNaN(Number(month)) && !isNaN(Number(day))) {
@@ -55,7 +39,7 @@ export default function TableSelector({ isOpen, onClose, tables, onSelect, selec
                 result.type = rest.join('_')
             }
         }
-        
+
         return result
     }
 
@@ -83,8 +67,8 @@ export default function TableSelector({ isOpen, onClose, tables, onSelect, selec
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
             if (!isOpen) return
-            
-            switch(e.key) {
+
+            switch (e.key) {
                 case 'ArrowDown':
                     e.preventDefault()
                     setSelectedIndex(i => Math.min(i + 1, filteredTables.length - 1))
@@ -106,7 +90,7 @@ export default function TableSelector({ isOpen, onClose, tables, onSelect, selec
                     break
             }
         }
-        
+
         window.addEventListener('keydown', handler)
         return () => window.removeEventListener('keydown', handler)
     }, [isOpen, filteredTables, selectedIndex, onSelect, onClose])
@@ -122,7 +106,7 @@ export default function TableSelector({ isOpen, onClose, tables, onSelect, selec
             <ModalContent bg={colorMode === 'dark' ? 'gray.800' : 'white'}>
                 <ModalHeader>
                     <HStack justify="space-between">
-                        <Text 
+                        <Text
                             color={colorMode === 'dark' ? 'primary.200' : 'primary.700'}
                             fontWeight="bold"
                         >
@@ -179,7 +163,7 @@ export default function TableSelector({ isOpen, onClose, tables, onSelect, selec
                                     >
                                         <HStack spacing={2}>
                                             {table.year ? (
-                                                <Tooltip 
+                                                <Tooltip
                                                     label={`Created on ${table.year}-${table.month}-${table.day}`}
                                                     placement="top"
                                                 >

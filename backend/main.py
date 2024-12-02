@@ -1,17 +1,20 @@
 import os
+import re
 import json
 import pickle
 import asyncio
 import numpy as np
 import pandas_gbq
-from typing import List
 from functools import wraps
 from pydantic import BaseModel
 from redis.asyncio import Redis
+from typing import Any, List, Optional
 from google.oauth2 import service_account
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+
+from model.models import QueryResponse, QueryRequest
 
 # Initialize credentials and project_id
 credentials_json = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_JSON')
@@ -38,12 +41,36 @@ redis_client = Redis(
     encoding='utf-8'
 )
 
+def create_cache_key(func_name: str, args: tuple, kwargs: dict) -> bytes:
+    """Create a deterministic cache key while avoiding circular references"""
+    
+    def sanitize_value(value):
+        if isinstance(value, BaseModel):
+
+            return json.dumps(value.model_dump(), sort_keys=True)
+        elif isinstance(value, (dict, list, set)):
+            return json.dumps(value, sort_keys=True)
+        else:
+            return str(value)
+        
+    processed_args = [sanitize_value(arg) for arg in args]
+    processed_kwargs = {k: sanitize_value(v) for k, v in sorted(kwargs.items())}
+    
+    key_parts = [
+        func_name,
+        ','.join(processed_args),
+        ','.join(f"{k}={v}" for k, v in processed_kwargs.items())
+    ]
+    
+    return ':'.join(key_parts).encode('utf-8')
+
+
 def cache_response(expire_time=300):
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
             try:
-                cache_key = f"{func.__name__}:{str(args)}:{str(kwargs)}".encode('utf-8')
+                cache_key = create_cache_key(func.__name__, args, kwargs)
                 
                 for retry in range(3):
                     try:
@@ -80,21 +107,6 @@ def cache_response(expire_time=300):
         return wrapper
     return decorator
 
-async def execute_gbq_query(query: str):
-    """Helper function to execute BigQuery queries consistently"""
-    try:
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
-            None,
-            lambda: pandas_gbq.read_gbq(
-                query,
-                project_id=project_id,
-                credentials=credentials
-            )
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"BigQuery error: {str(e)}")
-
 def convert_numpy_types(obj):
     """Convert NumPy types to native Python types"""
     if isinstance(obj, np.integer):
@@ -122,15 +134,82 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-class QueryRequest(BaseModel):
-    dataset_id: str
-    query: str
+class QueryProcessor:
+    def __init__(self, project_id: str):
+        self.project_id = project_id
+    
+    def qualify_table_references(self, query: str) -> str:
+        """Add project ID to unqualified table references."""
+        # Pattern to match table references like `dataset.table` but not `project.dataset.table`
+        pattern = r'`([^`\.]+\.[^`\.]+)`'
+        
+        def replace_match(match):
+            table_ref = match.group(1)
+            if '.' in table_ref and not table_ref.startswith(f"{self.project_id}."):
+                return f'`{self.project_id}.{table_ref}`'
+            return match.group(0)
+        
+        return re.sub(pattern, replace_match, query)
+
+    def generate_alias(self, table_name: str) -> str:
+        """Generate a meaningful alias for a table."""
+        parts = table_name.split('.')[-1].split('_')
+        alias = ''.join(word[0] for word in parts if len(word) > 2)
+        return alias.lower() or 't' 
+    
+    def build_select_query(
+            self, 
+            fields: list[str], 
+            table_name: str, 
+            conditions: Optional[list[str]] = None,
+            group_by: Optional[list[str]] = None,
+            order_by: Optional[list[str]] = None,
+            limit: Optional[int] = None
+        ) -> str:
+        """Build a SELECT query from components."""
+        table_alias = self.generate_alias(table_name)
+        qualified_table = f"`{self.project_id}.{table_name}`"
+        
+        # Add alias to field references
+        aliased_fields = [f"{table_alias}.{field}" for field in fields]
+        
+        query = f"SELECT {', '.join(aliased_fields)}\nFROM {qualified_table} AS {table_alias}"
+        
+        if conditions:
+            query += f"\nWHERE {' AND '.join(conditions)}"
+        
+        if group_by:
+            query += f"\nGROUP BY {', '.join(group_by)}"
+            
+        if order_by:
+            query += f"\nORDER BY {', '.join(order_by)}"
+            
+        if limit:
+            query += f"\nLIMIT {limit}"
+        
+        return query
+
+async def execute_gbq_query(query: str, project_id: str, credentials: Any):
+    """Enhanced query execution with automatic project ID qualification."""
+    processor = QueryProcessor(project_id)
+    qualified_query = processor.qualify_table_references(query)
+    print(f"Original query: {query}")
+    print(f"Qualified query: {qualified_query}")
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        None,
+        lambda: pandas_gbq.read_gbq(
+            qualified_query,
+            project_id=project_id,
+            credentials=credentials
+        )
+    )
 
 @app.get("/health")
 async def health_check():
@@ -217,25 +296,28 @@ async def get_table_info(dataset_id: str, table_id: str, result_limit: int = 5):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/query")
+@app.post("/api/query",  response_model=QueryResponse)
 @cache_response(expire_time=300)
 async def execute_query(query_request: QueryRequest):
     try:
         if not query_request.query.lower().strip().startswith('select'):
             raise HTTPException(status_code=400, detail="Only SELECT queries are allowed")
         
-        df = await execute_gbq_query(query_request.query)
-    
+        processor = QueryProcessor(project_id)
+        qualified_query = processor.qualify_table_references(query_request.query)
+        
+        df = await execute_gbq_query(qualified_query, project_id, credentials)
+        
         return JSONResponse(content={
-                "rows": serialize_dataframe(df),
-                "schema": [
-                    {
-                        "name": str(col),
-                        "type": str(df[col].dtype).upper()
-                    } for col in df.columns
-                ],
-                "total_rows": len(df)
-            })
+            "rows": serialize_dataframe(df),
+            "schema": [
+                {
+                    "name": str(col),
+                    "type": str(df[col].dtype).upper()
+                } for col in df.columns
+            ],
+            "total_rows": len(df)
+        })
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -14,13 +14,7 @@ import {
 } from '@chakra-ui/react'
 import { ChevronRightIcon, ChevronDownIcon } from '@chakra-ui/icons'
 import { useCallback } from 'react'
-
-interface QueryEditorProps {
-    query: string;
-    setQuery: (query: string) => void;
-    onRun: () => void;
-    isLoading: boolean;
-}
+import type { QueryEditorProps } from './types'
 
 export default function QueryEditor({ query, setQuery, onRun, isLoading }: QueryEditorProps) {
     const { colorMode } = useColorMode()

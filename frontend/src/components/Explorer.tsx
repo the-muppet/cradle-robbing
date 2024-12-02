@@ -25,37 +25,7 @@ import {
 import { StarIcon, MoonIcon, SunIcon, ChevronRightIcon } from '@chakra-ui/icons'
 import { formatDistance } from 'date-fns'
 
-interface TableField {
-    name: string;
-    type: string;
-}
-
-interface TableInfo {
-    row_count: number;
-    schema: TableField[];
-    preview: Record<string, any>[];
-}
-
-interface TableGroup {
-    year: string;
-    months: {
-        [key: string]: string[];
-    };
-}
-
-interface DatasetGroup {
-    category: string;
-    datasets: string[];
-}
-
-interface DatasetStats {
-    table_count: number;
-    last_modified: string;
-    total_size_bytes: number;
-    created: string;
-    description: string | null;
-    labels: Record<string, string>;
-}
+import type { TableInfo, DatasetStats, TableGroup, DatasetGroup } from './types'
 
 const MONTHS = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -283,7 +253,7 @@ export default function Explorer() {
         
         const newText = query.length > 0 
             ? isNewSelect
-                ? `SELECT ${prefix}.${fieldName}`
+                ? `SELECT ${fieldName}`
                 : hasExistingFields
                     ? `${query},\n  ${prefix}.${fieldName}`
                     : `${query} ${prefix}.${fieldName}`

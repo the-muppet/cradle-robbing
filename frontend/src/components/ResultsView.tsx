@@ -24,26 +24,9 @@ import {
     Spinner,
 } from '@chakra-ui/react'
 import { Key } from 'react';
+import { TableField, ResultsViewProps } from './types';
 
-interface TableField {
-    name: string;
-    type: string;
-}
-
-interface TableInfo {
-    row_count: number;
-    schema: TableField[];
-    preview: Record<string, any>[];
-}
-
-interface ResultsViewProps {
-    tableInfo?: TableInfo;
-    queryResults?: any;
-    onFieldClick: (fieldName: string) => void;
-    isLoading?: boolean;
-}
-
-export default function ResultsView({ tableInfo, queryResults, onFieldClick, isLoading }: ResultsViewProps) {
+function ResultsView({ tableInfo, queryResults, onFieldClick, isLoading }: ResultsViewProps) {
     const { colorMode } = useColorMode()
 
     return (
@@ -223,4 +206,6 @@ export default function ResultsView({ tableInfo, queryResults, onFieldClick, isL
             </CardBody>
         </Card>
     )
-} 
+};
+
+export default ResultsView;
