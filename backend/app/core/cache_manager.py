@@ -78,18 +78,17 @@ class CacheManager:
                 try:
                     cache_key = self.create_cache_key(func.__name__, args, kwargs)
                     
-                    try:
-                        cached_result = await self.redis_client.get(cache_key)
-                        if cached_result:
-                            try:
-                                result = pickle.loads(cached_result)
-                                return self._deserialize_dataframe(result)
-                            except Exception as e:
-                                print(f"Cache deserialization error: {str(e)}")
-                                await self.redis_client.delete(cache_key)
-                    except Exception as e:
-                        print(f"Redis get error: {str(e)}")
+                    cached_result = await self.redis_client.get(cache_key)
+                    if cached_result:
+                        try:
+                            result = pickle.loads(cached_result)
+                            # Ensure we're returning the same type as the original function
+                            return self._deserialize_dataframe(result)
+                        except Exception as e:
+                            print(f"Cache deserialization error: {str(e)}")
+                            await self.redis_client.delete(cache_key)
                     
+                    # Get fresh result from the original function
                     result = await func(*args, **kwargs)
                     
                     try:
@@ -103,5 +102,8 @@ class CacheManager:
                 except Exception as e:
                     print(f"Cache wrapper error: {str(e)}")
                     return await func(*args, **kwargs)
+            
+            # Preserve the original function's return type annotation
+            wrapper.__annotations__ = func.__annotations__
             return wrapper
         return decorator

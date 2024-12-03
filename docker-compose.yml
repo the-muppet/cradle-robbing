@@ -22,7 +22,6 @@ services:
       - GOOGLE_APPLICATION_CREDENTIALS_JSON=${GOOGLE_APPLICATION_CREDENTIALS_JSON}
       - REDIS_URL=${REDIS_URL}
       - DATABASE_URL=${DATABASE_URL}
-      - CORS_ORIGINS=["*"]
     depends_on:
       redis:
         condition: service_healthy
@@ -32,13 +31,8 @@ services:
       - app-network
     volumes:
       - ./backend:/app
-      - .env:/app/.env
-    command: uvicorn main:app --host 0.0.0.0 --port 8005 --reload
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      - .env:/app/app/.env
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8005 --reload
 
   frontend:
     build: 

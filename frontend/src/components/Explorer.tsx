@@ -202,7 +202,7 @@ export default function Explorer() {
         queryKey: ['dataset-stats', selectedDataset],
         queryFn: async () => {
             if (!selectedDataset) return null;
-            const statsRes = await fetch(`${API_URL}/datasets/${selectedDataset}/stats`);
+            const statsRes = await fetch(`${API_URL}/stats/${selectedDataset}`);
             return statsRes.json();
         },
         enabled: !!selectedDataset

@@ -1,16 +1,15 @@
 import pandas_gbq
 import pandas as pd
 from datetime import datetime
-from typing import Optional, Dict, List
-from sqlalchemy import create_engine, MetaData, inspect
+from typing import Any, Optional, Dict, List
+from sqlalchemy import MetaData, inspect
 
 from app.config.credentials import CredentialsInfo
 
 class PandasGBQSync:
-    def __init__(self, creds: CredentialsInfo, database_url: str):
+    def __init__(self, creds: CredentialsInfo):
         self.project_id = creds.project_id
         self.credentials = creds.credentials
-        self.engine = create_engine(database_url)
         self.metadata = MetaData()
         
         pandas_gbq.context.credentials = self.credentials
@@ -173,8 +172,7 @@ class PandasGBQSync:
                 "duration": str(datetime.now() - start_time)
             }
 
-    async def get_sync_status(self) -> List[Dict]:
-        """Get sync status of all tables"""
+    async def get_sync_status(self) -> Dict[str, Any]:
         query = """
         SELECT 
             schemaname as dataset_id,
@@ -189,7 +187,10 @@ class PandasGBQSync:
         
         with self.engine.connect() as conn:
             result = pd.read_sql(query, conn)
-            return result.to_dict(orient='records')
+            return {
+                "status": "success",
+                "tables": result.to_dict(orient='records')
+            }
 
     async def analyze_table(self, dataset_id: str, table_id: str) -> Dict:
         """Get detailed statistics about a synced table"""

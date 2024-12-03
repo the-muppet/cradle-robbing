@@ -1,18 +1,16 @@
 from typing import Optional, List, Dict, Any, Literal
-from pydantic import BaseModel, Field
-from dataclasses import dataclass
-from google.oauth2 import service_account
+from pydantic import BaseModel, ConfigDict, Field
 
-# Base database models
+# Base field and schema models
 class DatabaseField(BaseModel):
-    name: str
-    type: str
+    name: str = Field(..., min_length=1)
+    type: str 
     description: Optional[str] = None
     nullable: Optional[bool] = None
 
 class ForeignKeyConstraint(BaseModel):
     columns: List[str]
-    reference_table: str
+    reference_table: str = Field(..., min_length=1)
     reference_columns: List[str]
 
 class TableSchema(BaseModel):
@@ -20,14 +18,15 @@ class TableSchema(BaseModel):
     primary_key: Optional[List[str]] = None
     foreign_keys: Optional[List[ForeignKeyConstraint]] = None
 
-# Query builder models
+# Query types
 AggregationType = Literal["COUNT", "SUM", "AVG", "MIN", "MAX", "GROUP_CONCAT"]
 ComparisonOperator = Literal["=", "!=", ">", "<", ">=", "<=", "LIKE", "IN"]
 JoinType = Literal["INNER", "LEFT", "RIGHT", "FULL"]
 Conjunction = Literal["AND", "OR"]
 
+# Query builder models
 class QueryField(BaseModel):
-    field_name: str
+    field_name: str = Field(..., min_length=1)
     alias: Optional[str] = None
     table_alias: Optional[str] = None
     expression: Optional[str] = None
@@ -40,7 +39,7 @@ class JoinCondition(BaseModel):
 
 class JoinClause(BaseModel):
     type: JoinType
-    table: str
+    table: str = Field(..., min_length=1)
     table_alias: str
     conditions: List[JoinCondition]
 
@@ -72,22 +71,24 @@ class QueryBuilderState(BaseModel):
     offset: Optional[int] = None
     distinct: bool = False
 
-# API request/response models
+# API models
 class QueryRequest(BaseModel):
-    dataset_id: str
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    dataset_id: str = Field(..., min_length=1)
     query: str
     auto_alias: Optional[bool] = False
     parameters: Optional[Dict[str, Any]] = None
 
 class TableInfo(BaseModel):
-    row_count: int
-    table_schema: List[DatabaseField] = Field(..., alias="schema")
+    row_count: int = Field(..., ge=0)
+    column_schema: List[DatabaseField]
     preview: List[Dict[str, Any]]
 
 class QueryResponse(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     rows: List[Dict[str, Any]]
-    table_schema: List[DatabaseField] = Field(..., alias="schema")
-    total_rows: int
+    column_schema: List[DatabaseField]
+    total_rows: int = Field(..., ge=0)
 
 class QueryValidationError(BaseModel):
     message: str
@@ -95,28 +96,29 @@ class QueryValidationError(BaseModel):
     column: Optional[int] = None
     severity: Literal["ERROR", "WARNING", "INFO"]
 
-class ColumnSchema(BaseModel):
-    name: str
-    type: str
-
-class QueryRequest(BaseModel):
-    query: str
-
-class QueryResponse(BaseModel):
-    rows: List[Dict[str, Any]]
-    schema: List[ColumnSchema]
-    total_rows: int
-
 class SyncResponse(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     status: str
     message: str
     details: Optional[Dict[str, Any]] = None
 
 class SyncTableRequest(BaseModel):
-    dataset_id: str
-    table_id: str
+    dataset_id: str = Field(..., min_length=1)
+    table_id: str = Field(..., min_length=1) 
     chunksize: int = Field(default=10000, gt=0)
 
 class SyncDatasetRequest(BaseModel):
-    dataset_id: str
+    dataset_id: str = Field(..., min_length=1)
     exclude_tables: Optional[List[str]] = None
+
+class HealthResponse(BaseModel):
+    status: str
+    bigquery: str
+
+class DatasetStats(BaseModel):
+    table_count: int
+    last_modified: str
+    total_size_bytes: int
+    created: str
+    description: Optional[str] = None
+    labels: Dict[str, str]

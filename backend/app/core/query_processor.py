@@ -6,7 +6,7 @@ import numpy as np
 from fastapi import HTTPException
 
 from app.database.models import QueryResponse
-from backend.app.config.credentials import CredentialsInfo
+from app.config.credentials import CredentialsInfo
 
 
 class QueryProcessor:

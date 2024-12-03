@@ -6,3 +6,6 @@ pandas-gbq
 redis[hiredis]
 tqdm
 python-dotenv
+sqlalchemy
+pydantic-settings
+psycopg2-binary
