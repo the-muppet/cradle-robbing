@@ -6,7 +6,7 @@ import pandas as pd
 
 def initialize_client():
     # Set up credentials
-    os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = r"D:\gaeas_key.json"
+    credentials = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', 'creds.json')
     
     # Create the client
     client = bigquery.Client()
